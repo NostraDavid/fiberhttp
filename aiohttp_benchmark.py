@@ -1,22 +1,19 @@
-from aiohttp import ClientSession, TCPConnector
-from asyncio import sleep, gather, new_event_loop
+from asyncio import gather, new_event_loop, sleep
 from time import time
-import os
 
+from aiohttp import ClientSession, TCPConnector
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
+from common import Counting, debug_info, get_number, get_threads
 
+counter = Counting()
+NUMBER = get_number()
+THREADS = get_threads()
 
-counter = counting()
-NUMBER = os.environ.get("NUMBER", 100)
-THREADS = os.environ.get("THREADS", 100)
+debug_info(NUMBER, THREADS)
 
 
 async def count():
-    while counter.ok <= NUMBER:
+    while counter.can_send(NUMBER):
         print(f"\rOK = {counter.ok}; ERR = {counter.error}", end=" ")
         await sleep(0.1)
     print(f"\rOK = {counter.ok}; ERR = {counter.error}")
@@ -25,28 +22,29 @@ async def count():
     )
 
 
-async def test(AIOHTTP_CN):
-    while counter.ok <= NUMBER:
+async def test(aiohttp_cn: ClientSession):
+    while counter.can_send(NUMBER):
         try:
-            REQ = await AIOHTTP_CN.get("http://localhost:8080/")
-            RES = await REQ.text()
-            if RES.__contains__("random"):
-                counter.ok += 1
+            req = await aiohttp_cn.get("http://localhost:8080/")
+            res = await req.text()
+            if res.__contains__("random"):
+                counter.increment_ok()
             else:
-                counter.error += 1
-        except:
-            counter.error += 1
+                counter.increment_error()
+        except Exception:
+            counter.increment_error()
 
 
 async def main():
-    CONNECTOR = TCPConnector(ssl=False)
-    AIOHTTP_CN = ClientSession(connector=CONNECTOR)
+    connector = TCPConnector(ssl=False)
+    aiohttp_cn = ClientSession(connector=connector)
 
     tasks = []
     tasks.append(count())
     for _ in range(THREADS):
-        tasks.append(test(AIOHTTP_CN))
+        tasks.append(test(aiohttp_cn))
     await gather(*tasks)
+    await aiohttp_cn.close()
 
 
 start = time()

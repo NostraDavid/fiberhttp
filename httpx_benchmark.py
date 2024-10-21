@@ -1,24 +1,20 @@
-from httpx import Client, Request
 from threading import Thread
 from time import sleep, time
-import os
 
+from httpx import Client, Request
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
+from common import Counting, debug_info, get_number, get_threads
 
-
-counter = counting()
-NUMBER = os.environ.get("NUMBER", 100)
-THREADS = os.environ.get("THREADS", 100)
-
+counter = Counting()
 BUILD = Request("GET", "http://localhost:8080/")
+NUMBER = get_number()
+THREADS = get_threads()
+
+debug_info(NUMBER, THREADS)
 
 
 def count():
-    while counter.ok <= NUMBER:
+    while counter.can_send(NUMBER):
         print(f"\rOK = {counter.ok}; ERR = {counter.error}", end=" ")
         sleep(0.1)
     print(f"\rOK = {counter.ok}; ERR = {counter.error}")
@@ -29,14 +25,14 @@ def count():
 
 def test():
     CN_HTTPX: Client = Client()
-    while counter.ok <= NUMBER:
+    while counter.can_send(NUMBER):
         try:
             if CN_HTTPX.send(BUILD).text.__contains__("random"):
-                counter.ok += 1
+                counter.increment_ok()
             else:
-                counter.error += 1
-        except:
-            counter.error += 1
+                counter.increment_error()
+        except Exception:
+            counter.increment_error()
 
 
 Thread(target=count).start()

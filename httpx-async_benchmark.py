@@ -1,37 +1,40 @@
-from httpx import AsyncClient, Request
-from asyncio import sleep, gather, new_event_loop
-import os
+from asyncio import gather, new_event_loop, sleep
 from time import time
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
+from httpx import AsyncClient, Request
 
-counter = counting()
-NUMBER = os.environ.get("NUMBER", 100)
-THREADS = os.environ.get("THREADS", 100)
+from common import Counting, debug_info, get_number, get_threads
 
-BUILD = Request('GET', 'http://localhost:8080/')
+counter = Counting()
+BUILD = Request("GET", "http://localhost:8080/")
+NUMBER = get_number()
+THREADS = get_threads()
+
+debug_info(NUMBER, THREADS)
+
 
 async def count():
-    while counter.ok <= NUMBER:
-        print(f'\rOK = {counter.ok}; ERR = {counter.error}', end=' ')
+    while counter.can_send(NUMBER):
+        print(f"\rOK = {counter.ok}; ERR = {counter.error}", end=" ")
         await sleep(0.1)
-    print(f'\rOK = {counter.ok}; ERR = {counter.error}')
-    print(f'httpx-async Sent {NUMBER} HTTP Requests in {int(time() - start)} Seconds With {THREADS} Threads')
+    print(f"\rOK = {counter.ok}; ERR = {counter.error}")
+    print(
+        f"httpx-async Sent {NUMBER} HTTP Requests in {int(time() - start)} Seconds With {THREADS} Threads"
+    )
+
 
 async def test():
-    CN_HTTPX : AsyncClient = AsyncClient()
-    while counter.ok <= NUMBER:
+    cn_httpx: AsyncClient = AsyncClient()
+    while counter.can_send(NUMBER):
         try:
-            REQ = await CN_HTTPX.send(BUILD)
-            if REQ.text.__contains__('random'):
-                counter.ok += 1
+            REQ = await cn_httpx.send(BUILD)
+            if REQ.text.__contains__("random"):
+                counter.increment_ok()
             else:
-                counter.error += 1
-        except:
-            counter.error += 1
+                counter.increment_error()
+        except Exception:
+            counter.increment_error()
+
 
 async def main():
     tasks = []
@@ -39,6 +42,7 @@ async def main():
     for _ in range(THREADS):
         tasks.append(test())
     await gather(*tasks)
+
 
 start = time()
 loop = new_event_loop()

@@ -15,3 +15,5 @@
 !server.py
 !urllib3_benchmark.py
 !uv.lock
+!common.py
+!run.sh

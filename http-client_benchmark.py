@@ -1,22 +1,17 @@
 from http.client import HTTPConnection
 from threading import Thread
 from time import sleep, time
-import os
 
+from common import Counting, debug_info, get_number, get_threads
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
-
-
-counter = counting()
-NUMBER = os.environ.get("NUMBER", 100)
-THREADS = os.environ.get("THREADS", 100)
+counter = Counting()
+NUMBER = get_number()
+THREADS = get_threads()
+debug_info(NUMBER, THREADS)
 
 
 def count():
-    while counter.ok <= NUMBER:
+    while counter.can_send(NUMBER):
         print(f"\rOK = {counter.ok}; ERR = {counter.error}", end=" ")
         sleep(0.1)
     print(f"\rOK = {counter.ok}; ERR = {counter.error}")
@@ -26,17 +21,17 @@ def count():
 
 
 def test():
-    CN_HTTPCLIENT: HTTPConnection = HTTPConnection("localhost", timeout=1)
-    while counter.ok <= NUMBER:
+    cn_httpclient: HTTPConnection = HTTPConnection("localhost", timeout=1)
+    while counter.can_send(NUMBER):
         try:
-            CN_HTTPCLIENT.request("GET", "/")
-            RES = CN_HTTPCLIENT.getresponse()
-            if RES.read().decode("utf-8").__contains__("random"):
-                counter.ok += 1
+            cn_httpclient.request("GET", "/")
+            res = cn_httpclient.getresponse()
+            if res.read().decode("utf-8").__contains__("random"):
+                counter.increment_ok()
             else:
-                counter.error += 1
-        except:
-            counter.error += 1
+                counter.increment_error()
+        except Exception:
+            counter.increment_error()
 
 
 Thread(target=count).start()

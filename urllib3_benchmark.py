@@ -1,36 +1,38 @@
-from urllib3 import PoolManager, request
 from threading import Thread
-import os
 from time import sleep, time
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
+from urllib3 import PoolManager
 
-counter = counting()
-CN_URLLIB3 : PoolManager = PoolManager()
-NUMBER = os.environ.get("NUMBER", 100)
-THREADS = os.environ.get("THREADS", 100)
+from common import Counting, debug_info, get_number, get_threads
+
+counter = Counting()
+CN_URLLIB3: PoolManager = PoolManager()
+NUMBER = get_number()
+THREADS = get_threads()
+debug_info(NUMBER, THREADS)
+
 
 def count():
-    while counter.ok <= NUMBER:
-        print(f'\rOK = {counter.ok}; ERR = {counter.error}', end=' ')
+    while counter.can_send(NUMBER):
+        print(f"\rOK = {counter.ok}; ERR = {counter.error}", end=" ")
         sleep(0.1)
-    print(f'\rOK = {counter.ok}; ERR = {counter.error}')
-    print(f'urllib3 Sent {NUMBER} HTTP Requests in {str(time() - start).split('.')[0]} Second With {THREADS} Threads')
+    print(f"\rOK = {counter.ok}; ERR = {counter.error}")
+    print(
+        f'urllib3 Sent {NUMBER} HTTP Requests in {str(time() - start).split('.')[0]} Second With {THREADS} Threads'
+    )
+
 
 def test():
-    
-    while counter.ok <= NUMBER:
+    while counter.can_send(NUMBER):
         try:
-            RES = CN_URLLIB3.request('GET', 'http://localhost:8080/')
-            if RES.data.decode('utf-8').__contains__('random'):
-                counter.ok += 1
+            RES = CN_URLLIB3.request("GET", "http://localhost:8080/")
+            if RES.data.decode("utf-8").__contains__("random"):
+                counter.increment_ok()
             else:
-                counter.error += 1
-        except:
-            counter.error += 1
+                counter.increment_error()
+        except Exception:
+            counter.increment_error()
+
 
 Thread(target=count).start()
 
