@@ -4,7 +4,7 @@ from threading import Lock
 from structlog.stdlib import get_logger
 
 logger = get_logger()
-SLEEP_TIME = 1
+SLEEP_TIME = 0.1
 
 
 class Counting:

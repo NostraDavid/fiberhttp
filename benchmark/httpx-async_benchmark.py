@@ -1,5 +1,6 @@
 import sys
-from asyncio import gather, new_event_loop, sleep
+import asyncio
+from asyncio import gather, sleep
 from time import time
 
 from common import SLEEP_TIME, Counting, debug_info, get_number, get_threads
@@ -14,43 +15,47 @@ THREADS = get_threads()
 
 debug_info(NUMBER, THREADS)
 
+start = time()  # Moved before function definitions to ensure accessibility
 
-async def count():
+
+async def count(start_time: float):
     while counter.can_send(NUMBER):
-        # await logger.adebug("stats", ok=counter.ok, error=counter.error)
+        # logger.adebug("stats", ok=counter.ok, error=counter.error)  # Removed await
+        # logger.debug("stats", ok=counter.ok, error=counter.error)
         await sleep(SLEEP_TIME)
-    await logger.ainfo("stats", ok=counter.ok, error=counter.error)
-    await logger.ainfo(
+    logger.info("stats", ok=counter.ok, error=counter.error)
+    logger.info(
         "end-stats",
         file=sys.argv[0],
         requests=NUMBER,
-        request_time=int(time() - start),
+        request_time=int(time() - start_time),
         threads=THREADS,
     )
 
 
-async def test():
-    _client: AsyncClient = AsyncClient()
+async def test(client: AsyncClient):
     while counter.can_send(NUMBER):
         try:
-            REQ = await _client.send(BUILD)
-            if REQ.text.__contains__("random"):
+            REQ = await client.send(BUILD)
+            if "random" in REQ.text:
                 counter.increment_ok()
             else:
                 counter.increment_error()
-        except Exception:
+        except Exception as e:
             counter.increment_error()
+            logger.error("request_failed", error=str(e))
 
 
 async def main():
-    tasks = []
-    tasks.append(count())
-    for _ in range(THREADS):
-        tasks.append(test())
-    await gather(*tasks)
+    async with AsyncClient() as client:
+        tasks = []
+        tasks.append(count(start))
+        for _ in range(THREADS):
+            tasks.append(test(client))
+        await gather(*tasks)
 
 
-start = time()
-loop = new_event_loop()
-loop.run_until_complete(main())
-loop.close()
+try:
+    asyncio.run(main())
+except KeyboardInterrupt:
+    logger.info("Program interrupted by user")

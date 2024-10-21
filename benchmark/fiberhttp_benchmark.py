@@ -1,22 +1,30 @@
 import sys
 from threading import Thread
 from time import sleep, time
+from typing import Any
 
 from common import SLEEP_TIME, Counting, debug_info, get_number, get_threads
 from structlog.stdlib import get_logger
 
-from fiberhttp import client, request
+import fiberhttp
+
+
+class counting:
+    def __init__(self) -> None:
+        self.ok = 0
+        self.error = 0
+
 
 logger = get_logger()
-counter = Counting()
+counter = counting()
 NUMBER = get_number()
 THREADS = get_threads()
 debug_info(NUMBER, THREADS)
 
 
 def count():
-    while counter.can_send(NUMBER):
-        # logger.debug("stats", ok=counter.ok, error=counter.error)
+    while counter.ok <= NUMBER:
+        logger.debug("stats", ok=counter.ok, error=counter.error)
         sleep(SLEEP_TIME)
     logger.info("stats", ok=counter.ok, error=counter.error)
     logger.info(
@@ -29,17 +37,17 @@ def count():
 
 
 def test():
-    BUILD = request("GET", "http://localhost:8080/")
-    _client: client = client(timeout=1)
-    while counter.can_send(NUMBER):
+    req = fiberhttp.request("GET", "http://localhost:8082/")
+    client = fiberhttp.client(timeout=0.4)
+    while counter.ok <= NUMBER:
         try:
-            if _client.send(BUILD).text().__contains__("random"):
-                counter.increment_ok()
+            if client.send(req).text().__contains__("random"):
+                counter.ok += 1
             else:
-                counter.increment_error()
+                counter.error += 1
         except Exception:
-            counter.increment_error()
-    _client.close()
+            counter.error += 1
+    client.close()
 
 
 Thread(target=count).start()

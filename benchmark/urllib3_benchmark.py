@@ -12,6 +12,8 @@ NUMBER = get_number()
 THREADS = get_threads()
 debug_info(NUMBER, THREADS)
 
+start = time()  # Initialize 'start' before starting any threads
+
 
 def count():
     while counter.can_send(NUMBER):
@@ -28,19 +30,32 @@ def count():
 
 
 def test():
-    _client: PoolManager = PoolManager()
+    _client = PoolManager()
     while counter.can_send(NUMBER):
         try:
             res = _client.request("GET", "http://localhost:8080/")
-            if res.data.decode("utf-8").__contains__("random"):
+            response_text = res.data.decode("utf-8")
+            if "random" in response_text:
                 counter.increment_ok()
             else:
                 counter.increment_error()
-        except Exception:
+        except Exception as e:
+            logger.error("Request failed", error=str(e))
             counter.increment_error()
 
 
-Thread(target=count).start()
-start = time()
+# Start the count thread after initializing 'start'
+count_thread = Thread(target=count)
+count_thread.start()
+
+# Start the test threads
+test_threads = []
 for _ in range(THREADS):
-    Thread(target=test).start()
+    thread = Thread(target=test)
+    thread.start()
+    test_threads.append(thread)
+
+# Optionally, wait for all threads to finish
+count_thread.join()
+for thread in test_threads:
+    thread.join()

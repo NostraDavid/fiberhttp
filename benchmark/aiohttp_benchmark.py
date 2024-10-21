@@ -16,10 +16,12 @@ debug_info(NUMBER, THREADS)
 
 async def count():
     while counter.can_send(NUMBER):
-        # await logger.adebug("stats", ok=counter.ok, error=counter.error)
+        # Use synchronous logging without await
+        # logger.debug("stats", ok=counter.ok, error=counter.error)
         await sleep(SLEEP_TIME)
-    await logger.ainfo("stats", ok=counter.ok, error=counter.error)
-    await logger.ainfo(
+
+    logger.info("stats", ok=counter.ok, error=counter.error)
+    logger.info(
         "end-stats",
         file=sys.argv[0],
         requests=NUMBER,
@@ -31,29 +33,26 @@ async def count():
 async def test(_client: ClientSession):
     while counter.can_send(NUMBER):
         try:
-            req = await _client.get("http://localhost:8080/")
-            res = await req.text()
-            if res.__contains__("random"):
-                counter.increment_ok()
-            else:
-                counter.increment_error()
-        except Exception:
+            async with _client.get("http://localhost:8080/") as req:
+                res = await req.text()
+                if "random" in res:
+                    counter.increment_ok()
+                else:
+                    counter.increment_error()
+        except Exception as e:
+            logger.error("Request failed", error=str(e))
             counter.increment_error()
 
 
 async def main():
     connector = TCPConnector(ssl=False)
-    aiohttp_cn = ClientSession(connector=connector)
-
-    tasks: list = []
-    tasks.append(count())
-    for _ in range(THREADS):
-        tasks.append(test(aiohttp_cn))
-    await gather(*tasks)
-    await aiohttp_cn.close()
+    async with ClientSession(connector=connector) as aiohttp_cn:
+        tasks = [count()] + [test(aiohttp_cn) for _ in range(THREADS)]
+        await gather(*tasks)
 
 
 start = time()
-loop = new_event_loop()
-loop.run_until_complete(main())
-loop.close()
+# It's recommended to use asyncio.run for simplicity and better loop management
+import asyncio
+
+asyncio.run(main())
