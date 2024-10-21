@@ -3,7 +3,7 @@ from random import randint
 from threading import Thread
 
 HOST = 'localhost'
-PORT = 80
+PORT = 8080
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 

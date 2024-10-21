@@ -1,5 +1,6 @@
 from httpx import AsyncClient, Request
 from asyncio import sleep, gather, new_event_loop
+import os
 from time import time
 
 class counting:
@@ -8,10 +9,10 @@ class counting:
         self.error = 0
 
 counter = counting()
-NUMBER = 1000000
-THREADS = 100
+NUMBER = os.environ.get("NUMBER", 100)
+THREADS = os.environ.get("THREADS", 100)
 
-BUILD = Request('GET', 'http://localhost/')
+BUILD = Request('GET', 'http://localhost:8080/')
 
 async def count():
     while counter.ok <= NUMBER:

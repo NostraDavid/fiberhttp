@@ -1,5 +1,6 @@
 from requests import Session, PreparedRequest, session
 from threading import Thread
+import os
 from time import sleep, time
 
 class counting:
@@ -10,10 +11,10 @@ class counting:
 counter = counting()
 CN_REQUESTS : Session = session()
 BUILD = PreparedRequest()
-BUILD.url = 'http://localhost'
+BUILD.url = 'http://localhost:8080/'
 BUILD.method = 'GET'
-NUMBER = 1000000
-THREADS = 100
+NUMBER = os.environ.get("NUMBER", 100)
+THREADS = os.environ.get("THREADS", 100)
 
 def count():
     while counter.ok <= NUMBER:
