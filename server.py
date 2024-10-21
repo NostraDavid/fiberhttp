@@ -22,13 +22,10 @@ def handle_client(
     client_address: Tuple[str, int],
 ) -> None:
     try:
-        logging.info(f"Connection established with {client_address}")
         request: bytes = client_socket.recv(1024)
         if not request:
             logging.warning(f"No data received from {client_address}.")
             return
-        request_decoded: str = request.decode("utf-8").strip()
-        logging.info(f"Received request from {client_address}:\n{request_decoded}")
 
         # Generate a random number
         random_number: int = randint(1, 100000000000)
@@ -46,12 +43,10 @@ def handle_client(
 
         # Send the response
         client_socket.sendall(response.encode("utf-8"))
-        logging.info(f"Sent response to {client_address}")
     except Exception as e:
         logging.error(f"Error handling client {client_address}: {e}", exc_info=True)
     finally:
         client_socket.close()
-        logging.info(f"Closed connection to {client_address}")
 
 
 def start_server() -> None:

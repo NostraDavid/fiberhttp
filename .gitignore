@@ -4,16 +4,12 @@
 !.env
 !.gitignore
 !.python-version
-!aiohttp_benchmark.py
-!fiberhttp_benchmark.py
-!http-client_benchmark.py
-!httpx_benchmark.py
-!httpx-async_benchmark.py
 !pyproject.toml
 !README.md
-!requests_benchmark.py
 !server.py
-!urllib3_benchmark.py
 !uv.lock
 !common.py
 !run.sh
+
+# folders
+!benchmark/

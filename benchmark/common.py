@@ -1,6 +1,11 @@
 import os
 from threading import Lock
 
+from structlog.stdlib import get_logger
+
+logger = get_logger()
+SLEEP_TIME = 1
+
 
 class Counting:
     def __init__(self) -> None:
@@ -33,5 +38,5 @@ def get_threads():
 
 
 def debug_info(threads: int, number: int):
-    print("Number of threads: " + str(threads))
-    print("Number of requests: " + str(number))
+    # logger.debug("debug", number=number, threads=threads)
+    pass
