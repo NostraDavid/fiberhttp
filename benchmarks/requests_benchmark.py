@@ -1,39 +1,30 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "requests",
+# ]
+# ///
+
 from requests import Session, PreparedRequest, session
+from time import time
 from threading import Thread
-from time import sleep, time
+from benchmark_helper import Counting, count, test_factory, Settings
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
-
-counter = counting()
-CN_REQUESTS : Session = session()
-BUILD = PreparedRequest()
-BUILD.url = 'http://localhost'
-BUILD.method = 'GET'
-NUMBER = 1000000
-THREADS = 100
-
-def count():
-    while counter.ok <= NUMBER:
-        print(f'\rOK = {counter.ok}; ERR = {counter.error}', end=' ')
-        sleep(0.1)
-    print(f'\rOK = {counter.ok}; ERR = {counter.error}')
-    print(f'requests Sent {NUMBER} HTTP Requests in {str(time() - start).split('.')[0]} Second With {THREADS} Threads')
-
-def test():
-    while counter.ok <= NUMBER:
-        try:
-            if CN_REQUESTS.send(BUILD).text.__contains__('random'):
-                counter.ok += 1
-            else:
-                counter.error += 1
-        except:
-            counter.error += 1
-
-Thread(target=count).start()
-
+counter = Counting()
 start = time()
-for _ in range(THREADS):
-    Thread(target=test).start()
+CN_REQUESTS: Session = session()
+
+# Prepare the request
+BUILD = PreparedRequest()
+BUILD.prepare(method="GET", url=Settings.target_url)
+
+def requests_request(url: str) -> bool:
+    response = CN_REQUESTS.send(BUILD)
+    return 'random' in response.text
+
+# Start counting thread
+Thread(target=count, args=(counter, Settings.NUMBER, Settings.THREADS, 'requests', start)).start()
+
+# Start test threads
+for _ in range(Settings.THREADS):
+    Thread(target=test_factory(requests_request, counter, Settings.NUMBER, Settings.target_url)).start()

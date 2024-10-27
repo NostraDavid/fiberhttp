@@ -1,38 +1,55 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = []
+# ///
+
 from http.client import HTTPConnection
+from time import time
 from threading import Thread
-from time import sleep, time
+from benchmark_helper import Counting, count, test_factory, Settings
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
-
-counter = counting()
-NUMBER = 1000000
-THREADS = 100
-
-def count():
-    while counter.ok <= NUMBER:
-        print(f'\rOK = {counter.ok}; ERR = {counter.error}', end=' ')
-        sleep(0.1)
-    print(f'\rOK = {counter.ok}; ERR = {counter.error}')
-    print(f'http.client Sent {NUMBER} HTTP Requests in {str(time() - start).split('.')[0]} Second With {THREADS} Threads')
-
-def test():
-    CN_HTTPCLIENT : HTTPConnection = HTTPConnection('localhost', timeout=1)
-    while counter.ok <= NUMBER:
-        try:
-            CN_HTTPCLIENT.request('GET', '/')
-            RES = CN_HTTPCLIENT.getresponse()
-            if RES.read().decode('utf-8').__contains__('random'):
-                counter.ok += 1
-            else:
-                counter.error += 1
-        except:
-            counter.error += 1
-
-Thread(target=count).start()
-
+counter = Counting()
 start = time()
-for _ in range(THREADS):
-    Thread(target=test).start()
+
+def http_client_request(url: str) -> bool:
+    # Create a new connection instance for each thread
+    connection = HTTPConnection("localhost", 8080, timeout=1)
+    try:
+        connection.request("GET", "/")
+        response = connection.getresponse()
+        result = 'random' in response.read().decode("utf-8")
+        
+        if not result:
+            print("Unexpected response, retrying...")
+            # Retry once if the first attempt fails
+            connection.request("GET", "/")
+            response = connection.getresponse()
+            result = 'random' in response.read().decode("utf-8")
+        
+        return result
+    except Exception as e:
+        print(f"Request failed: {e}")
+        return False
+    finally:
+        # Ensure the connection is closed after each request
+        connection.close()
+
+# Wrapping the test function without reusing a shared connection
+def wrapped_test():
+    test_factory(http_client_request, counter, Settings.NUMBER, Settings.target_url)()
+
+# Start the counting thread
+count_thread = Thread(target=count, args=(counter, Settings.NUMBER, Settings.THREADS, "http.client", start))
+count_thread.start()
+
+# Start test threads and collect them in a list
+test_threads = [Thread(target=wrapped_test) for _ in range(Settings.THREADS)]
+for thread in test_threads:
+    thread.start()
+
+# Wait for all test threads to finish
+for thread in test_threads:
+    thread.join()
+
+# Wait for the counting thread to finish
+count_thread.join()

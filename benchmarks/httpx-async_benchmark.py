@@ -1,45 +1,44 @@
-from httpx import AsyncClient, Request
-from asyncio import sleep, gather, new_event_loop
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "httpx",
+# ]
+# ///
+
+import asyncio
+from httpx import AsyncClient
+from asyncio import gather
 from time import time
+from benchmark_helper import Counting, async_count, Settings
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
+counter = Counting()
+start = time()
 
-counter = counting()
-NUMBER = 1000000
-THREADS = 100
+async def httpx_async_request(client: AsyncClient, url: str) -> bool:
+    try:
+        response = await client.get(url)
+        return 'random' in response.text
+    except Exception as e:
+        print(f"Request failed: {e}")
+        return False
 
-BUILD = Request('GET', 'http://localhost/')
-
-async def count():
-    while counter.ok <= NUMBER:
-        print(f'\rOK = {counter.ok}; ERR = {counter.error}', end=' ')
-        await sleep(0.1)
-    print(f'\rOK = {counter.ok}; ERR = {counter.error}')
-    print(f'httpx-async Sent {NUMBER} HTTP Requests in {int(time() - start)} Seconds With {THREADS} Threads')
-
-async def test():
-    CN_HTTPX : AsyncClient = AsyncClient()
-    while counter.ok <= NUMBER:
-        try:
-            REQ = await CN_HTTPX.send(BUILD)
-            if REQ.text.__contains__('random'):
-                counter.ok += 1
-            else:
-                counter.error += 1
-        except:
+async def test(client: AsyncClient):
+    while counter.ok <= Settings.NUMBER:
+        if await httpx_async_request(client, Settings.target_url):
+            counter.ok += 1
+        else:
             counter.error += 1
 
 async def main():
-    tasks = []
-    tasks.append(count())
-    for _ in range(THREADS):
-        tasks.append(test())
-    await gather(*tasks)
+    async with AsyncClient() as client:
+        # Start the counting task
+        tasks = [async_count(counter, Settings.NUMBER, Settings.THREADS, "httpx-async", start)]
+        
+        # Start the test tasks
+        tasks.extend([test(client) for _ in range(Settings.THREADS)])
+        
+        # Run all tasks concurrently
+        await gather(*tasks)
 
-start = time()
-loop = new_event_loop()
-loop.run_until_complete(main())
-loop.close()
+# Run the async event loop
+asyncio.run(main())

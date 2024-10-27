@@ -1,37 +1,55 @@
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "fiberhttp",
+# ]
+# ///
+
 from fiberhttp import Client, Request
+from time import time
 from threading import Thread
-from time import sleep, time
+from benchmark_helper import Counting, count, test_factory, Settings
 
-class counting:
-    def __init__(self) -> None:
-        self.ok = 0
-        self.error = 0
-
-counter = counting()
-BUILD = Request('GET', 'http://localhost/')
-NUMBER = 1000000
-THREADS = 100
-
-def count():
-    while counter.ok <= NUMBER:
-        print(f'\rOK = {counter.ok}; ERR = {counter.error}', end=' ')
-        sleep(0.1)
-    print(f'\rOK = {counter.ok}; ERR = {counter.error}')
-    print(f'FiberHTTP Sent {NUMBER} HTTP Requests in {str(time() - start).split('.')[0]} Second With {THREADS} Threads')
-
-def test():
-    CN_FIBERHTTP : Client = Client(timeout=0.4)
-    while counter.ok <= NUMBER:
-        try:
-            if CN_FIBERHTTP.send(BUILD).text().__contains__('random'):
-                counter.ok += 1
-            else:
-                counter.error += 1
-        except:
-            counter.error += 1
-
-Thread(target=count).start()
-
+counter = Counting()
 start = time()
-for _ in range(THREADS):
-    Thread(target=test).start()
+request_template = Request("GET", Settings.target_url)  # Prepare the request template once
+
+def fiberhttp_request(url: str, client: Client) -> bool:
+    try:
+        response = client.send(request_template)
+        result = 'random' in response.text()
+        
+        if not result:
+            print("Unexpected response, retrying...")
+            # Retry once if the first attempt fails
+            response = client.send(request_template)
+            result = 'random' in response.text()
+        
+        return result
+    except Exception as e:
+        print(f"Request failed: {e}")
+        return False
+
+# Wrapping the test function to reuse a client instance within each thread
+def wrapped_test():
+    client = Client(timeout=0.4)  # Create a single client instance per thread
+    try:
+        test_factory(lambda url: fiberhttp_request(url, client), counter, Settings.NUMBER, Settings.target_url)()
+    finally:
+        client.close()  # Close the client after all requests are complete in this thread
+
+# Start the counting thread
+count_thread = Thread(target=count, args=(counter, Settings.NUMBER, Settings.THREADS, "FiberHTTP", start))
+count_thread.start()
+
+# Start test threads and collect them in a list
+test_threads = [Thread(target=wrapped_test) for _ in range(Settings.THREADS)]
+for thread in test_threads:
+    thread.start()
+
+# Wait for all test threads to finish
+for thread in test_threads:
+    thread.join()
+
+# Wait for the counting thread to finish
+count_thread.join()
