@@ -12,7 +12,7 @@ from benchmark_helper import Counting, count, test_factory, Settings
 
 counter = Counting()
 start = time()
-request_template = Request("GET", Settings.target_url)  # Prepare the request template once
+request_template = Request("GET", Settings.target_url)
 
 def fiberhttp_request(url: str, client: Client) -> bool:
     try:
