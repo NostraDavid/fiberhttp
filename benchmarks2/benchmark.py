@@ -10,6 +10,7 @@
 # ]
 # ///
 
+import subprocess
 import structlog
 from collections import OrderedDict
 import logging
@@ -48,20 +49,28 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Silence third-party library loggers
-logging.getLogger('requests').setLevel(logging.WARNING)
-logging.getLogger('urllib3').setLevel(logging.WARNING)
-logging.getLogger('httpx').setLevel(logging.WARNING)
-logging.getLogger('aiohttp').setLevel(logging.WARNING)
-warnings.filterwarnings('ignore')
+logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("aiohttp").setLevel(logging.WARNING)
+warnings.filterwarnings("ignore")
 
-benchmark_duration = 1  # Time to run each benchmark in seconds
+
+# tracking how long the benchmark itself takes to set a base number
+def benchmark_base() -> tuple[int, float]:
+    start_time = time.perf_counter()
+    count = 0
+    while time.perf_counter() - start_time < settings.benchmark_duration:
+        count += 1
+    elapsed_time = time.perf_counter() - start_time
+    return count, elapsed_time
 
 
 # Using requests library
 def benchmark_requests() -> tuple[int, float]:
     start_time = time.perf_counter()
     count = 0
-    while time.perf_counter() - start_time < benchmark_duration:
+    while time.perf_counter() - start_time < settings.benchmark_duration:
         response = requests.get(settings.test_url)
         response.raise_for_status()  # Ensure no failures
         count += 1
@@ -74,7 +83,7 @@ def benchmark_urllib3() -> tuple[int, float]:
     http = PoolManager()
     start_time = time.perf_counter()
     count = 0
-    while time.perf_counter() - start_time < benchmark_duration:
+    while time.perf_counter() - start_time < settings.benchmark_duration:
         response = http.request("GET", settings.test_url)
         if response.status != 200:
             raise ValueError("Request failed")
@@ -87,7 +96,7 @@ def benchmark_urllib3() -> tuple[int, float]:
 def benchmark_http_client() -> tuple[int, float]:
     start_time = time.perf_counter()
     count = 0
-    while time.perf_counter() - start_time < benchmark_duration:
+    while time.perf_counter() - start_time < settings.benchmark_duration:
         conn = http.client.HTTPConnection(settings.host, settings.port)
         try:
             conn.request("GET", "/")
@@ -109,25 +118,11 @@ async def benchmark_aiohttp() -> tuple[int, float]:
     async with aiohttp.ClientSession() as session:
         start_time = time.perf_counter()
         count = 0
-        while time.perf_counter() - start_time < benchmark_duration:
+        while time.perf_counter() - start_time < settings.benchmark_duration:
             async with session.get(settings.test_url) as response:
                 if response.status != 200:
                     raise ValueError("Request failed")
                 count += 1
-        elapsed_time = time.perf_counter() - start_time
-    return count, elapsed_time
-
-
-# Using httpx (asynchronous)
-async def benchmark_httpx_async() -> tuple[int, float]:
-    async with httpx.AsyncClient() as client:
-        start_time = time.perf_counter()
-        count = 0
-        while time.perf_counter() - start_time < benchmark_duration:
-            response = await client.get(settings.test_url)
-            if response.status_code != 200:
-                raise ValueError("Request failed")
-            count += 1
         elapsed_time = time.perf_counter() - start_time
     return count, elapsed_time
 
@@ -137,7 +132,7 @@ def benchmark_httpx_sync() -> tuple[int, float]:
     client = httpx.Client()
     start_time = time.perf_counter()
     count = 0
-    while time.perf_counter() - start_time < benchmark_duration:
+    while time.perf_counter() - start_time < settings.benchmark_duration:
         response = client.get(settings.test_url)
         if response.status_code != 200:
             raise ValueError("Request failed")
@@ -146,32 +141,83 @@ def benchmark_httpx_sync() -> tuple[int, float]:
     return count, elapsed_time
 
 
+# Using httpx (asynchronous)
+async def benchmark_httpx_async() -> tuple[int, float]:
+    async with httpx.AsyncClient() as client:
+        start_time = time.perf_counter()
+        count = 0
+        while time.perf_counter() - start_time < settings.benchmark_duration:
+            response = await client.get(settings.test_url)
+            if response.status_code != 200:
+                raise ValueError("Request failed")
+            count += 1
+        elapsed_time = time.perf_counter() - start_time
+    return count, elapsed_time
+
+
 def benchmark_fiberhttp() -> tuple[int, float]:
-    client = fiberhttp.Client(timeout=2)  # Increased timeout
+    client = fiberhttp.Client(timeout=settings.timeout)  # Increased timeout
     request = fiberhttp.Request("GET", settings.test_url)  # Reuse the request object
     start_time = time.perf_counter()
     count = 0
 
-    try:
-        while time.perf_counter() - start_time < benchmark_duration:
-            try:
-                response = client.send(request)
-                if response.status_code() == 200:
-                    count += 1
-                else:
-                    logger.error(
-                        "Request failed with status code",
-                        status_code=response.status_code(),
-                    )
-            except Exception as e:
-                logger.error("Request failed with error", error=str(e))
-    except Exception as e:
-        logger.error("Error during benchmarking", error=str(e))
-    finally:
-        try:
-            client.close()
-        except Exception as close_error:
-            logger.error("Error closing client", error=str(close_error))
+    while time.perf_counter() - start_time < settings.benchmark_duration:
+        response = client.send(request)
+        if response.status_code() != 200:
+            raise ValueError("Request failed")
+        count += 1
+    elapsed_time = time.perf_counter() - start_time
+    return count, elapsed_time
+
+
+def benchmark_curl_slow() -> tuple[int, float]:
+    """Basic curl command via Python to compare performance with."""
+    start_time = time.perf_counter()
+    count = 0
+
+    while time.perf_counter() - start_time < settings.benchmark_duration:
+        result = subprocess.run(
+            [
+                "curl",
+                "-s",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{http_code}",
+                "--max-time",
+                str(settings.timeout),
+                settings.test_url,
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0 or result.stdout.strip() != "200":
+            raise ValueError("Request failed")
+        count += 1
+    elapsed_time = time.perf_counter() - start_time
+    return count, elapsed_time
+
+
+def benchmark_curl_fast() -> tuple[int, float]:
+    """
+    Mixing xargs and curl to increase performance. A single curl command in
+    serial would be slower than most other libs.
+    """
+    start_time = time.perf_counter()
+    count = 0
+    num_parallel = 5
+
+    command = f"echo '{settings.test_url}\n' | xargs -P {num_parallel} -I {{}} curl -s -o /dev/null -w '%{{http_code}}' --max-time {settings.timeout} {{}}"
+
+    while time.perf_counter() - start_time < settings.benchmark_duration:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+
+        if result.returncode != 0 or "200" not in result.stdout:
+            raise ValueError("Request failed")
+
+        count += num_parallel
+
     elapsed_time = time.perf_counter() - start_time
     return count, elapsed_time
 
@@ -191,7 +237,6 @@ def run_benchmark(
         count, elapsed_time = asyncio.run(benchmark_function())
     else:
         count, elapsed_time = benchmark_function()
-
     logger.info(
         event="end-benchmark",
         library=name,
@@ -203,6 +248,9 @@ def run_benchmark(
 if __name__ == "__main__":
     # Run benchmarks with reduced code duplication
     benchmarks = [
+        ("base", benchmark_base, False),
+        ("curl_slow", benchmark_curl_slow, False),
+        ("curl_fast", benchmark_curl_fast, False),
         ("fiberhttp", benchmark_fiberhttp, False),
         ("requests", benchmark_requests, False),
         ("urllib3", benchmark_urllib3, False),
