@@ -2,7 +2,6 @@
 # requires-python = ">=3.13"
 # dependencies = [
 #     "fastapi",
-#     "flask",
 #     "uvicorn",
 # ]
 # ///
